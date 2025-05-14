@@ -18,6 +18,8 @@ import IconGoogleCalendar from "./icons/IconGoogleCalendar"
 import IconGoogleSlides from "./icons/IconGoogleSlides"
 import IconGoogleDrive from "./icons/IconGoogleDrive"
 import IconGoogleMail from "./icons/IconGoogleMail"
+import GmailSearchResults from "./agents/GmailSearchResults"
+import CalendarEventResults from "./agents/CalendarEventResults"
 import toast from "react-hot-toast"
 
 /**
@@ -104,12 +106,111 @@ const ToolResultBubble = ({
 
 	const handleCopyToClipboard = () => {
 		navigator.clipboard
-			.writeText(result)
+			.writeText(typeof result === 'string' ? result : JSON.stringify(result, null, 2))
 			.then(() => {
 				setCopied(true)
 				setTimeout(() => setCopied(false), 2000)
 			})
 			.catch((err) => toast.error(`Failed to copy text: ${err}`))
+	}
+	
+	// Function to render appropriate content based on result type
+	const renderContent = () => {
+		try {
+			// If result is already an object, use it directly
+			let parsedResult = typeof result === 'object' ? result : JSON.parse(result)
+			
+			// If result is a string that happens to be JSON, parse it
+			if (typeof parsedResult === 'string') {
+				parsedResult = JSON.parse(parsedResult)
+			}
+			
+			// Check for Gmail search results
+			if (parsedResult.type === "toolResult" && parsedResult.tool_name === "search_inbox") {
+				return (
+					<GmailSearchResults
+						emails={parsedResult.emails}
+						gmailSearchUrl={parsedResult.gmail_search_url}
+					/>
+				)
+			}
+			
+			// Check for Calendar event results
+			if (parsedResult.type === "toolResult" && 
+				(parsedResult.tool_name === "add_event" || 
+				 parsedResult.tool_name === "search_events" || 
+				 parsedResult.tool_name === "list_upcoming_events")) {
+				
+				// For event creation result
+				if (parsedResult.tool_name === "add_event") {
+					const event = {
+						summary: parsedResult.summary || "New Event",
+						start: parsedResult.start,
+						end: parsedResult.end,
+						description: parsedResult.description,
+						attendees: parsedResult.attendees,
+						location: parsedResult.location,
+						htmlLink: parsedResult.event_id
+					}
+					
+					return (
+						<CalendarEventResults
+							isNewEvent={true}
+							events={[event]}
+							calendarLink={parsedResult.event_id}
+						/>
+					)
+				} 
+				// For event search/list results
+				else {
+					return (
+						<CalendarEventResults
+							isNewEvent={false}
+							events={parsedResult.events || []}
+							calendarLink="https://calendar.google.com/"
+						/>
+					)
+				}
+			}
+			
+			// Default: render as markdown
+			return (
+				<>
+					<p className="text-sm font-semibold">Result:</p>
+					<div style={{ wordBreak: "break-word" }}>
+						<ReactMarkdown
+							className="prose prose-invert text-sm"
+							remarkPlugins={[remarkGfm]}
+							children={typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
+							components={{
+								a: ({ href, children }) => (
+									<LinkButton href={href} children={children} />
+								)
+							}}
+						/>
+					</div>
+				</>
+			)
+		} catch (e) {
+			// If parsing fails, render as plain text/markdown
+			return (
+				<>
+					<p className="text-sm font-semibold">Result:</p>
+					<div style={{ wordBreak: "break-word" }}>
+						<ReactMarkdown
+							className="prose prose-invert text-sm"
+							remarkPlugins={[remarkGfm]}
+							children={typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
+							components={{
+								a: ({ href, children }) => (
+									<LinkButton href={href} children={children} />
+								)
+							}}
+						/>
+					</div>
+				</>
+			)
+		}
 	}
 
 	return (
@@ -119,19 +220,7 @@ const ToolResultBubble = ({
 					Update on '{task}'
 				</h4>
 			)}
-			<p className="text-sm font-semibold">Result:</p>
-			<div style={{ wordBreak: "break-word" }}>
-				<ReactMarkdown
-					className="prose prose-invert text-sm"
-					remarkPlugins={[remarkGfm]}
-					children={result}
-					components={{
-						a: ({ href, children }) => (
-							<LinkButton href={href} children={children} />
-						)
-					}}
-				/>
-			</div>
+			{renderContent()}
 
 			<div className="flex justify-start items-center space-x-4 mt-4">
 				{memoryUsed && (

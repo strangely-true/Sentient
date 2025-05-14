@@ -19,6 +19,7 @@ import IconGoogleSlides from "./icons/IconGoogleSlides" // Importing custom icon
 import IconGoogleDrive from "./icons/IconGoogleDrive" // Importing custom icon component for Google Drive
 import IconGoogleMail from "./icons/IconGoogleMail" // Importing custom icon component for Google Mail
 import GmailSearchResults from "./agents/GmailSearchResults" // Importing GmailSearchResults component
+import CalendarEventResults from "./agents/CalendarEventResults" // Importing CalendarEventResults component
 import toast from "react-hot-toast" // Importing toast for displaying toast notifications
 
 /**
@@ -182,6 +183,7 @@ const ChatBubble = ({
 			if (typeof parsedMessage === "string") {
 				parsedMessage = JSON.parse(parsedMessage)
 			}
+			
 			// Check if the parsed message is a tool result for Gmail inbox search
 			if (
 				parsedMessage.type === "toolResult" &&
@@ -194,6 +196,46 @@ const ChatBubble = ({
 						gmailSearchUrl={parsedMessage.gmail_search_url} // Pass Gmail search URL to GmailSearchResults
 					/>
 				)
+			}
+			
+			// Check if the parsed message is a tool result for calendar event creation/search
+			if (
+				parsedMessage.type === "toolResult" &&
+				(parsedMessage.tool_name === "add_event" || 
+				 parsedMessage.tool_name === "search_events" || 
+				 parsedMessage.tool_name === "list_upcoming_events")
+			) {
+				// For event creation result
+				if (parsedMessage.tool_name === "add_event") {
+					// Create a single event object for the new event
+					const event = {
+						summary: parsedMessage.summary || "New Event",
+						start: parsedMessage.start,
+						end: parsedMessage.end,
+						description: parsedMessage.description,
+						attendees: parsedMessage.attendees,
+						location: parsedMessage.location,
+						htmlLink: parsedMessage.event_id // Link to the event in Google Calendar
+					}
+					
+					return (
+						<CalendarEventResults
+							isNewEvent={true}
+							events={[event]} // Pass as array with single event
+							calendarLink={parsedMessage.event_id} // Pass Calendar URL
+						/>
+					)
+				} 
+				// For event search/list results
+				else {
+					return (
+						<CalendarEventResults
+							isNewEvent={false}
+							events={parsedMessage.events || []} // Pass events array
+							calendarLink="https://calendar.google.com/" // Default calendar URL
+						/>
+					)
+				}
 			}
 		} catch (e) {
 			// JSON parsing failed or message is not a structured tool result, render as Markdown
